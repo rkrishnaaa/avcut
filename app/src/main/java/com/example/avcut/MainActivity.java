@@ -43,6 +43,7 @@ public class MainActivity extends AppCompatActivity {
     private EditText etStartTime, etEndTime;
     private Button btnSelectFile, btnPreview, btnCut;
     private VideoView videoView;
+    private MediaController mediaController;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -61,22 +62,17 @@ public class MainActivity extends AppCompatActivity {
         btnCut.setOnClickListener(view -> cutFile());
         videoView = findViewById(R.id.videoView);
         // Add media controls (play, pause, seek)
-        MediaController mediaController = new MediaController(this);
+        mediaController = new MediaController(this);
         mediaController.setAnchorView(videoView);
         videoView.setMediaController(mediaController);
+        // Show controls immediately and never auto-hide
 
         btnPreview.setOnClickListener(view -> playSelectedVideo());
 
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) { // Android 11 & 12
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, 100);
-        } else { // Below Android 11
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE}, 100);
-        }
-
     }
 
-    private void requestStoragePermissions() {
+    private void checkPermissionAndSelectFile() {
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // Android 14 (API 34)
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_AUDIO}, 100);
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) { // Android 13 (API 33)
@@ -91,9 +87,6 @@ public class MainActivity extends AppCompatActivity {
             intent.setData(Uri.parse("package:" + getPackageName()));
             startActivity(intent);
         }
-    }
-
-    private void checkPermissionAndSelectFile() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // Android 14+
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_VIDEO) != PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_AUDIO) != PackageManager.PERMISSION_GRANTED) {
 
@@ -118,7 +111,6 @@ public class MainActivity extends AppCompatActivity {
         if (requestCode == STORAGE_PERMISSION_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 Log.d("Permissions", "Storage permission granted.");
-                selectFile();
             } else {
                 Log.e("Permissions", "Storage permission denied!");
                 Toast.makeText(this, "App needs media access to function properly.", Toast.LENGTH_LONG).show();
@@ -143,14 +135,70 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void playSelectedVideo() {
-        if (fileUri != null) {
-            videoView.setVideoURI(fileUri);
-            videoView.start();
-        } else {
-            Toast.makeText(this, "No file selected", Toast.LENGTH_SHORT).show();
+    //    private void playSelectedVideo() {
+//        if (fileUri != null) {
+//            videoView.setVideoURI(fileUri);
+//            videoView.start();
+//        } else {
+//            Toast.makeText(this, "No file selected", Toast.LENGTH_SHORT).show();
+//        }
+//    }
+    private int parseTimeToMillis(String time) {
+        try {
+            String[] parts = time.split(":");
+            int hours = 0, minutes = 0, seconds = 0;
+
+            if (parts.length == 3) { // Format: HH:MM:SS
+                hours = Integer.parseInt(parts[0]);
+                minutes = Integer.parseInt(parts[1]);
+                seconds = Integer.parseInt(parts[2]);
+            } else if (parts.length == 2) { // Format: MM:SS
+                minutes = Integer.parseInt(parts[0]);
+                seconds = Integer.parseInt(parts[1]);
+            } else if (parts.length == 1) { // Format: SS
+                seconds = Integer.parseInt(parts[0]);
+            } else {
+                throw new IllegalArgumentException("Invalid time format");
+            }
+
+            return (hours * 3600 + minutes * 60 + seconds) * 1000;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return 0; // Return 0 in case of an error
         }
     }
+
+
+    private void playSelectedVideo() {
+        if (fileUri == null) {
+            mediaController.hide();
+            Toast.makeText(this, "No file selected", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        try {
+            int startTimeMillis = parseTimeToMillis(etStartTime.getText().toString()); // Convert "00:00:05" to milliseconds
+            int endTimeMillis = parseTimeToMillis(etEndTime.getText().toString()); // Convert "00:00:10" to milliseconds
+
+            videoView.setVideoURI(fileUri);
+            videoView.setOnPreparedListener(mp -> {
+                mediaController.show(0);
+                mp.seekTo(startTimeMillis);
+                videoView.start();
+
+                // Stop video when it reaches the end time
+                new android.os.Handler().postDelayed(() -> {
+                    if (videoView.isPlaying()) {
+                        videoView.pause();
+                    }
+                }, endTimeMillis - startTimeMillis);
+            });
+
+        } catch (Exception e) {
+            Toast.makeText(this, "Invalid time format", Toast.LENGTH_SHORT).show();
+        }
+    }
+
 
     private void cutFile() {
         if (fileUri == null) {
