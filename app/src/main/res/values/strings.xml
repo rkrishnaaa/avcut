@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">AVCut</string>
+    <string name="start_time_label">Start Time</string>
+    <string name="start_time_hh_mm_ss">Start Time (HH:MM:SS)</string>
+    <string name="end_time_label">End Time</string>
+    <string name="end_time_hh_mm_ss">End Time (HH:MM:SS)</string>
+    <string name="preview">Preview</string>
+    <string name="cut_file">Cut File</string>
+    <string name="select_video_audio">Select Video/Audio</string>
+</resources>
